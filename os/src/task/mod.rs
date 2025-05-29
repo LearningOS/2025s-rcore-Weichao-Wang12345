@@ -17,12 +17,13 @@ mod task;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+//use crate::syscall;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-
+use crate::config::MAX_SYSCALL_NUM;
 /// The task manager, where all the tasks are managed.
 ///
 /// Functions implemented on `TaskManager` deals with all task state transitions
@@ -54,6 +55,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_times:[0;MAX_SYSCALL_NUM],
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -135,8 +137,29 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    /// add syscall times
+    fn add_syscall_times(&self,syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current =  inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id]+=1;
+    }
+    ///get syscall times
+    fn get_syscall_times(&self) ->[usize;500]{
+        let inner = self.inner.exclusive_access();
+        let current =  inner.current_task;
+        inner.tasks[current].syscall_times.clone()
+    }
 }
-
+///add syscall times
+pub fn add_syscall_times(syscall_id:usize)
+{
+    TASK_MANAGER.add_syscall_times(syscall_id);
+}
+///get syscall times
+pub fn get_syscall_times()->[usize;500]
+{
+    TASK_MANAGER.get_syscall_times()
+}
 /// Run the first task in task list.
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
